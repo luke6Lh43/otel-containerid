@@ -1,0 +1,28 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: get-servicename-to-containerid-mapping
+  namespace: mynamespace
+spec:
+  schedule: "*/5 * * * *"
+  successfulJobsHistoryLimit: 0
+  failedJobsHistoryLimit: 0
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          serviceAccountName: internal-kubectl
+          containers:
+          - name: tester
+            image: bitnami/kubectl
+            command:
+              - "bin/bash"
+              - "-c"
+              - kubectl get pods -n mynamespace -o=jsonpath='{range .items[*]}{.metadata.labels.app\.kubernetes\.io\/component}{"="}{.status.containerStatuses[0].containerID}{"\n"}{end}' > /temp/file && sed -i 's/containerd:\/\///g' /temp/file && kubectl create configmap servicename-to-containerid-mapping-configmap -n mynamespace --from-file=/temp/file --dry-run=client -o yaml | kubectl apply -f -
+            volumeMounts:
+              - name: temp
+                mountPath: /temp
+          volumes:
+            - name: temp
+              emptyDir: {}
+          restartPolicy: OnFailure
